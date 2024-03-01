@@ -61,6 +61,7 @@ def gather_night(file_name):
 if __name__ == "__main__":
     gather_hour(sys.argv[1])
 
+    # Below run at about 10pm
     # print("Going to sleep for two hours.")
     # time.sleep(120 * 60)
     # print("Now gathering data for four hours.")

@@ -4,6 +4,7 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 import sys
+import cProfile
 
 
 RE = 6378.137  # radius of Earth
@@ -11,7 +12,6 @@ rl = RE * math.cos(
     52.22977 * math.pi / 180
 )  # radius of the latitude line circle passing through Warsaw
 
-# dataset_name = sys.argv[1]
 
 # boundaries
 high_speed = 50  # km/h
@@ -44,6 +44,7 @@ def coord_dist(lat1, lon1, lat2, lon2):
     return distance(lat_to_dist(lat1, lat2), lon_to_dist(lon1, lon2))
 
 
+# Function for calculating relative time and speed
 def load_and_preprocess(dataset_name):
     # loading and sorting data
     df = pd.read_csv(dataset_name)
@@ -90,19 +91,12 @@ def show_map(df, x="Lon", y="Lat", c="speed", title="Speed map"):
     ax.set_ylabel(y)
     ax.set_title(title)
     plt.show(block=False)
-    # return ax
-    # plt.show()
-
-
-# def show_time_map(df, x="Lon", y="Lat", c="RelTime"):
-#     df.plot.scatter(x=x, y=y, c=c, s=20)
-#     plt.show()
 
 
 def vis_brigade(df, brigade, speed=True):
     df = df[df["Brigade"] == brigade]
     c = "speed" if speed else "RelTime"
-    show_map(df, c="RelTime", title="Map of " + brigade + " brigade")
+    show_map(df, c=c, title="Map of " + brigade + " brigade")
 
 
 def vis_line(df, line, speed=True):
@@ -159,6 +153,9 @@ def calc_delays(dataset_name, stop_file_name):
     df = df.sort_values(by=["VehicleNumber", "Time"])
     df = df.drop(["VehicleNumber"], axis=1)
 
+    df = df[(df["Brigade"] == "1") & (df["Lines"] == "720")]
+    print(df)
+
     # filtering stop times for the concerned window
     df["Time"] = pd.to_datetime(df["Time"]).dt.strftime("%X")
     min_time = df["Time"].min()
@@ -175,7 +172,7 @@ def calc_delays(dataset_name, stop_file_name):
         st = st[(st["Times"] <= min_time) | (max_time <= st["Times"])]
 
     # joining frames to find minimal arrival of a good bus at stop
-    res = pd.merge(df, st, how="inner", on=["Lines"])
+    res = pd.merge(df, st, how="inner", on=["Lines", "Brigade"])
     res["Time"] = pd.to_datetime(res["Time"], format="%X")  # bus arrival
     res["Times"] = pd.to_datetime(res["Times"], format="%X")  # planned arrival
     res = res[
@@ -183,13 +180,17 @@ def calc_delays(dataset_name, stop_file_name):
         & (res["Times"] < res["Time"])
     ]
     # getting min
-    res = res.groupby(["Lons", "Lats", "Times", "Lines"], as_index=False)["Time"].min()
+    res = res.groupby(["Lons", "Lats", "Times", "Lines", "Brigade"], as_index=False)[
+        "Time"
+    ].min()
     res["delay"] = res["Time"] - res["Times"]
     # transforming delay to minutes
     res["delay"] = res["delay"].astype("timedelta64[s]").astype(int) / 60
     res["delay"] = res["delay"].astype(int)
 
-    show_map(res, x="Lons", y="Lats", c="delay", title="Delay map")
+    res = res[(res["Brigade"] == "1") & (res["Lines"] == "720")]
+    # print(res)
+    # show_map(res, x="Lons", y="Lats", c="delay", title="Delay map")
     # show_map(res, x="Lons", y="delay", c="delay", title="Delay height density")
     return res
 
@@ -212,6 +213,7 @@ def all():
     find_fast_busses(df)
     sd = calc_delays(sys.argv[1], "stop_data.csv")
     calc_statistics(sd)
+    # example uses:
     vis_brigade(df, "1")
     vis_line(df, "521")
     vis_line(df, "172")
@@ -220,3 +222,4 @@ def all():
 
 if __name__ == "__main__":
     all()
+    # cProfile.run("all()")
